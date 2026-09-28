@@ -196,7 +196,7 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--a
 .auth-page { min-height: 100vh; display: grid; grid-template-columns: 1.1fr 1fr; }
 .auth-intro { padding: 12vh 8vw; background: var(--intro-bg); color: #fff; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; }
 .auth-intro .muted { color: inherit; opacity: 0.85; }
-.auth-logo-plate { background: #fff; border-radius: 14px; padding: 0.7rem 1rem; margin-bottom: 1.75rem; }
+.auth-logo-plate { background: var(--logo-bg); border-radius: 14px; padding: 0.7rem 1rem; margin-bottom: 1.75rem; }
 .auth-lede { font-size: 1.35rem; line-height: 1.45; max-width: 30ch; margin: 1.25rem 0 1.5rem; }
 .auth-page .auth-card { align-self: center; justify-self: center; }
 .auth-card { width: min(420px, calc(100% - 2rem)); background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 2rem; margin: 2rem 1rem; }
