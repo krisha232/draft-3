@@ -41,7 +41,7 @@ export default function Members() {
     if (role !== 'all' && p.role !== role) return false;
     if (year && String(p.batch_year) !== year) return false;
     if (q) {
-      const hay = `${p.full_name} ${p.headline || ''} ${p.location || ''} ${p.university || ''} ${p.major || ''} ${p.subjects || ''} ${p.field || ''}`.toLowerCase();
+      const hay = `${p.full_name} ${p.headline || ''} ${p.location || ''} ${p.university || ''} ${p.major || ''} ${p.subjects || ''} ${p.field || ''} ${p.teaches || ''}`.toLowerCase();
       if (!hay.includes(q.toLowerCase())) return false;
     }
     return true;
@@ -55,7 +55,7 @@ export default function Members() {
     <div className="page">
       <h1 className="page-title">Members</h1>
       <div className="filters">
-        <input type="search" placeholder="Search name, college, course or subjects" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search members" />
+        <input type="search" placeholder="Search name, subject, college or course" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search members" />
         <select value={role} onChange={(e) => setRole(e.target.value)} aria-label="Role">
           <option value="all">Everyone</option>
           <option value="student">Students</option>
@@ -109,6 +109,8 @@ function MemberList({ people }) {
               <span className="muted small">{roleLine(p)}</span>
               {p.headline && <span className="small">{p.headline}</span>}
               {p.role === 'alumni' && <AlumniStudy p={p} />}
+              {p.role === 'student' && p.subjects && <span className="small muted">Subjects: {p.subjects}</span>}
+              {p.role === 'staff' && p.teaches && <span className="small muted">Teaches: {p.teaches}</span>}
             </span>
           </Link>
         </li>

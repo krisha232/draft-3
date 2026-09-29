@@ -465,3 +465,8 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--a
 .finder-row:hover { background: var(--surface-2); }
 .finder-row .person > span:last-child .small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
 .conv-heading { padding: 0 0.5rem; font-size: 0.95rem; color: var(--muted); }
+.idcard-fields dd { overflow-wrap: anywhere; }
+input[aria-invalid="true"] { border-color: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }
+.file-picker { margin-bottom: 1rem; }
+.file-picker .btn svg { vertical-align: -3px; margin-right: 0.25rem; }
+.event-main .attachments { margin-top: 0.5rem; }

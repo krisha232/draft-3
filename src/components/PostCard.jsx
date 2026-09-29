@@ -161,7 +161,7 @@ function Comments({ postId, onCountChange }) {
   );
 }
 
-function Attachments({ items }) {
+export function Attachments({ items }) {
   const images = items.filter((a) => isImage(a.type));
   const files = items.filter((a) => !isImage(a.type));
   return (

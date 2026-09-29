@@ -140,7 +140,9 @@ function EditProfile({ person, onDone, onCancel, onPhotoChange }) {
     field: person.field || '',
     major: person.major || '',
     subjects: person.subjects || '',
+    teaches: person.teaches || '',
   });
+  const [shareEmail, setShareEmail] = useState(Boolean(person.shared_email));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
@@ -158,10 +160,18 @@ function EditProfile({ person, onDone, onCancel, onPhotoChange }) {
           university: f.university.trim() || null,
           field: f.field || null,
           major: f.major.trim() || null,
-          subjects: f.subjects.trim() || null,
         }),
+        ...(person.role !== 'staff' && { subjects: f.subjects.trim() || null }),
+        ...(person.role === 'staff' && { teaches: f.teaches.trim() || null }),
       })
       .eq('id', person.id);
+    if (!error && person.role === 'staff' && shareEmail !== Boolean(person.shared_email)) {
+      const res = await supabase.rpc('set_email_sharing', { share: shareEmail });
+      if (res.error) {
+        setBusy(false);
+        return setError(errorText(res.error));
+      }
+    }
     setBusy(false);
     if (error) setError(errorText(error));
     else onDone();
@@ -173,9 +183,27 @@ function EditProfile({ person, onDone, onCancel, onPhotoChange }) {
       <p className="muted small">Your name, role and class year come from school records. Ask an admin to correct them.</p>
       <PhotoPicker person={person} onChange={onPhotoChange} />
       <label className="field">
-        <span>Headline</span>
-        <input maxLength={120} value={f.headline} onChange={set('headline')} placeholder="e.g. Engineer at Infosys, or Class 11 science" />
+        <span>Bio</span>
+        <input maxLength={120} value={f.headline} onChange={set('headline')} placeholder="e.g. Grade 8 Student, Alumni at Brown" />
       </label>
+      {person.role === 'student' && (
+        <label className="field">
+          <span>Subjects you’re taking</span>
+          <input maxLength={200} value={f.subjects} onChange={set('subjects')} placeholder="e.g. Physics, Chemistry, Maths, Computer Science" />
+        </label>
+      )}
+      {person.role === 'staff' && (
+        <>
+          <label className="field">
+            <span>Subjects you teach</span>
+            <input maxLength={120} value={f.teaches} onChange={set('teaches')} placeholder="e.g. Physics, Maths" />
+          </label>
+          <label className="check">
+            <input type="checkbox" checked={shareEmail} onChange={(e) => setShareEmail(e.target.checked)} />
+            <span>Show my email address on my profile so students can contact me</span>
+          </label>
+        </>
+      )}
       {person.role === 'alumni' && (
         <fieldset className="study-fields">
           <legend>What you studied</legend>

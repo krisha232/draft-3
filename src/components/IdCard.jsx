@@ -45,6 +45,24 @@ export default function IdCard({ person, idNumber }) {
                 <dd>{person.subjects}</dd>
               </div>
             )}
+            {person.role === 'student' && person.subjects && (
+              <div>
+                <dt>Subjects</dt>
+                <dd>{person.subjects}</dd>
+              </div>
+            )}
+            {person.role === 'staff' && person.teaches && (
+              <div>
+                <dt>Teaches</dt>
+                <dd>{person.teaches}</dd>
+              </div>
+            )}
+            {person.role === 'staff' && person.shared_email && (
+              <div>
+                <dt>Email</dt>
+                <dd><a href={`mailto:${person.shared_email}`}>{person.shared_email}</a></dd>
+              </div>
+            )}
             {person.location && (
               <div>
                 <dt>Based in</dt>

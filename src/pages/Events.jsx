@@ -5,8 +5,11 @@ import { supabase, AUTHOR_COLS } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
 import { errorText, eventWhen } from '../lib/format';
 import ReportDialog from '../components/ReportDialog';
+import FilePicker from '../components/FilePicker';
+import { Attachments } from '../components/PostCard';
+import { uploadAttachments, deleteAttachments } from '../lib/files';
 
-const EVENT_SELECT = `id, title, description, location, starts_at, ends_at, created_by,
+const EVENT_SELECT = `id, title, description, location, starts_at, ends_at, created_by, attachments,
   host:profiles!events_created_by_fkey(${AUTHOR_COLS}),
   event_rsvps(user_id, status, person:profiles!event_rsvps_user_id_fkey(id, full_name))`;
 
@@ -79,6 +82,7 @@ function EventCard({ ev, onChange }) {
     if (!confirm('Delete this event?')) return;
     const { error } = await supabase.from('events').delete().eq('id', ev.id);
     if (error) alert(errorText(error));
+    else await deleteAttachments(ev.attachments);
     onChange();
   };
 
@@ -93,6 +97,7 @@ function EventCard({ ev, onChange }) {
         <p className="event-line"><Clock size={16} aria-hidden="true" /> {eventWhen(ev.starts_at, ev.ends_at)}</p>
         {ev.location && <p className="event-line"><MapPin size={16} aria-hidden="true" /> {ev.location}</p>}
         {ev.description && <p className="event-desc">{ev.description}</p>}
+        {ev.attachments?.length > 0 && <Attachments items={ev.attachments} />}
         <p className="muted small">
           Hosted by <Link to={`/profile/${ev.host?.id}`}>{ev.host?.full_name}</Link>
           {' '}
@@ -128,26 +133,62 @@ function EventCard({ ev, onChange }) {
   );
 }
 
+// "2026-10-05T19:00" for a datetime-local input, in local time
+function toLocalInput(date) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 function EventForm({ onDone, onCancel }) {
+  const { profile } = useAuth();
   const [f, setF] = useState({ title: '', starts_at: '', ends_at: '', location: '', description: '' });
+  const [files, setFiles] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
 
+  const start = f.starts_at ? new Date(f.starts_at) : null;
+  const end = f.ends_at ? new Date(f.ends_at) : null;
+  const startOk = start && !isNaN(start);
+  const endOk = !f.ends_at || (end && !isNaN(end));
+  const endBeforeStart = startOk && end && !isNaN(end) && end <= start;
+
+  // When the start changes and the end would now be before it, move the end to 2 hours after the start
+  const setStart = (e) => {
+    const value = e.target.value;
+    const s = new Date(value);
+    let ends_at = f.ends_at;
+    if (value && !isNaN(s) && ends_at && new Date(ends_at) <= s) ends_at = toLocalInput(new Date(s.getTime() + 2 * 3600 * 1000));
+    setF({ ...f, starts_at: value, ends_at });
+  };
+
   const submit = async (e) => {
     e.preventDefault();
-    setBusy(true);
     setError('');
+    if (!startOk) return setError('Choose when the event starts.');
+    if (!endOk) return setError('The end time isn’t a valid date and time.');
+    if (endBeforeStart) return setError('The event ends before it starts. Check the end time (and AM/PM).');
+    setBusy(true);
+    let attachments = [];
+    try {
+      attachments = await uploadAttachments(profile.id, files);
+    } catch (err) {
+      setBusy(false);
+      return setError(err.message);
+    }
     const { error } = await supabase.from('events').insert({
       title: f.title.trim(),
-      starts_at: new Date(f.starts_at).toISOString(),
-      ends_at: f.ends_at ? new Date(f.ends_at).toISOString() : null,
+      starts_at: start.toISOString(),
+      ends_at: end ? end.toISOString() : null,
       location: f.location.trim() || null,
       description: f.description.trim() || null,
+      attachments,
     });
     setBusy(false);
-    if (error) setError(/ends_at/.test(error.message) ? 'The end time must be after the start time.' : errorText(error));
-    else onDone();
+    if (error) {
+      await deleteAttachments(attachments);
+      setError(/events_check|ends_at/.test(error.message) ? 'The event ends before it starts. Check the end time (and AM/PM).' : errorText(error));
+    } else onDone();
   };
 
   return (
@@ -155,15 +196,27 @@ function EventForm({ onDone, onCancel }) {
       <h2>New event</h2>
       <label className="field"><span>Title</span><input required maxLength={150} value={f.title} onChange={set('title')} /></label>
       <div className="two-col">
-        <label className="field"><span>Starts</span><input type="datetime-local" required value={f.starts_at} onChange={set('starts_at')} /></label>
-        <label className="field"><span>Ends (optional)</span><input type="datetime-local" value={f.ends_at} onChange={set('ends_at')} /></label>
+        <label className="field"><span>Starts</span><input type="datetime-local" required value={f.starts_at} onChange={setStart} /></label>
+        <label className="field">
+          <span>Ends (optional)</span>
+          <input type="datetime-local" min={f.starts_at || undefined} value={f.ends_at} onChange={set('ends_at')} aria-invalid={endBeforeStart || undefined} />
+        </label>
       </div>
+      {startOk && !endBeforeStart && endOk && (
+        <p className="notice small">Your event: {eventWhen(start.toISOString(), end ? end.toISOString() : null)}</p>
+      )}
+      {endBeforeStart && (
+        <p className="error small">
+          This ends before it starts. Check the end time, especially AM and PM: an evening event ending at 9:00 should be 9:00 PM.
+        </p>
+      )}
       <label className="field"><span>Where</span><input maxLength={150} value={f.location} onChange={set('location')} placeholder="School auditorium, or an online link" /></label>
       <label className="field"><span>Details</span><textarea rows={4} maxLength={3000} value={f.description} onChange={set('description')} /></label>
+      <FilePicker files={files} setFiles={setFiles} onError={setError} />
       {error && <p className="error">{error}</p>}
       <div className="row-end">
         <button type="button" className="btn ghost" onClick={onCancel}>Cancel</button>
-        <button className="btn" disabled={busy}>{busy ? 'Creating…' : 'Create event'}</button>
+        <button className="btn" disabled={busy || endBeforeStart}>{busy ? (files.length ? 'Uploading…' : 'Creating…') : 'Create event'}</button>
       </div>
     </form>
   );
