@@ -3,13 +3,15 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
 import { errorText, ROLE_LABEL, timeAgo } from '../lib/format';
+import { EventCard, EVENT_SELECT } from './Events';
 
-const TABS = ['Approvals', 'Members', 'Roster', 'Reports'];
+const TABS = ['Approvals', 'Events', 'Members', 'Roster', 'Reports'];
 
 export default function Admin() {
   const [tab, setTab] = useState('Approvals');
   const [members, setMembers] = useState(null);
   const [openReports, setOpenReports] = useState(0);
+  const [pendingEvents, setPendingEvents] = useState(0);
   const [error, setError] = useState('');
 
   const loadMembers = useCallback(async () => {
@@ -18,6 +20,8 @@ export default function Admin() {
     setMembers(data || []);
     const { count } = await supabase.from('reports').select('id', { count: 'exact', head: true }).eq('status', 'open');
     setOpenReports(count || 0);
+    const ev = await supabase.from('events').select('id', { count: 'exact', head: true }).eq('status', 'pending');
+    setPendingEvents(ev.count || 0);
   }, []);
 
   useEffect(() => {
@@ -25,7 +29,7 @@ export default function Admin() {
   }, [loadMembers]);
 
   const pending = members?.filter((m) => m.status === 'pending') || [];
-  const counts = { Approvals: pending.length, Reports: openReports };
+  const counts = { Approvals: pending.length, Events: pendingEvents, Reports: openReports };
 
   return (
     <div className="page wide">
@@ -40,6 +44,7 @@ export default function Admin() {
       </div>
       {error && <p className="error">{error}</p>}
       {tab === 'Approvals' && <Approvals pending={pending} loading={!members} reload={loadMembers} />}
+      {tab === 'Events' && <EventApprovals reload={loadMembers} />}
       {tab === 'Members' && <MembersAdmin members={members} reload={loadMembers} />}
       {tab === 'Roster' && <Roster />}
       {tab === 'Reports' && <Reports reload={loadMembers} />}
@@ -417,6 +422,37 @@ function Reports({ reload }) {
           </article>
         ))}
       </div>
+    </>
+  );
+}
+
+function EventApprovals({ reload }) {
+  const [events, setEvents] = useState(null);
+
+  const load = useCallback(async () => {
+    const { data } = await supabase.from('events').select(EVENT_SELECT).eq('status', 'pending').order('created_at');
+    setEvents(data || []);
+    reload();
+  }, [reload]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  if (events === null) return <p className="muted">Loading…</p>;
+  return (
+    <>
+      <p className="muted">
+        Events created by students and alumni wait here until you approve them. Staff and admin events are published
+        straight away.
+      </p>
+      {events.length === 0 ? (
+        <div className="empty"><p>No events waiting for approval.</p></div>
+      ) : (
+        <div className="stack">
+          {events.map((ev) => <EventCard key={ev.id} ev={ev} onChange={load} />)}
+        </div>
+      )}
     </>
   );
 }
