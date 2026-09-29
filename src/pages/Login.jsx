@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { supabase, SITE_NAME, SCHOOL_NAME } from '../lib/supabase';
+import { useEffect } from 'react';
+import { supabase, SITE_NAME, SCHOOL_NAME, emailLinkError, RESET_PATH } from '../lib/supabase';
 import { errorText } from '../lib/format';
 import Logo from '../components/Logo';
 
@@ -8,8 +9,13 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(linkErrorMessage);
   const [notice, setNotice] = useState('');
+
+  // Remove the error details from the address bar once shown
+  useEffect(() => {
+    if (emailLinkError.code || emailLinkError.description || window.location.pathname !== '/') window.history.replaceState(null, '', '/');
+  }, []);
 
   const switchTo = (m) => {
     setMode(m);
@@ -37,7 +43,8 @@ export default function Login() {
         setNotice(`We sent a confirmation link to ${email}. Open it to continue, then verify your school ID.`);
       }
     } else {
-      res = await supabase.auth.resetPasswordForEmail(email, { redirectTo: redirect });
+      // Reset emails bring people to /reset-password so the site always knows to ask for a new password
+      res = await supabase.auth.resetPasswordForEmail(email, { redirectTo: redirect + RESET_PATH });
       if (!res.error) setNotice(`If ${email} has an account, a reset link is on its way.`);
     }
     setBusy(false);
@@ -97,4 +104,13 @@ export default function Login() {
       </section>
     </div>
   );
+}
+
+function linkErrorMessage() {
+  const { code, description } = emailLinkError;
+  if (!code && !description) return '';
+  if (code === 'otp_expired' || /expired|invalid/i.test(description)) {
+    return 'That email link has expired or was already used. To reset your password, click “Forgot password?” below to get a new link, and use only the newest email. If you were confirming your email, try signing in.';
+  }
+  return `That email link didn’t work (${description || code}). Please request a new one.`;
 }

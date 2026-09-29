@@ -15,13 +15,17 @@ export default function ResetPassword() {
     const { error } = await supabase.auth.updateUser({ password });
     setBusy(false);
     if (error) setError(errorText(error));
-    else setRecovering(false);
+    else {
+      window.history.replaceState(null, '', '/');
+      setRecovering(false);
+    }
   };
 
   return (
     <div className="center-page">
       <form className="auth-card" onSubmit={submit}>
         <h1>Choose a new password</h1>
+        <p className="muted">You opened a password reset link. Enter the new password you want to use.</p>
         <label className="field">
           <span>New password</span>
           <input type="password" required minLength={8} autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus />

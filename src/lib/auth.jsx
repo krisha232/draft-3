@@ -1,12 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { supabase, PROFILE_COLS } from './supabase';
+import { supabase, PROFILE_COLS, cameFromRecoveryLink } from './supabase';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(undefined); // undefined = still loading
   const [profile, setProfile] = useState(undefined); // null = no profile yet
-  const [recovering, setRecovering] = useState(false);
+  // Start in reset-password mode if the page was opened from a reset email
+  const [recovering, setRecovering] = useState(cameFromRecoveryLink);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session ?? null));
