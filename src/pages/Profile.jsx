@@ -180,7 +180,7 @@ function EditProfile({ person, onDone, onCancel, onPhotoChange }) {
   return (
     <form className="panel" onSubmit={submit}>
       <h2>Edit profile</h2>
-      <p className="muted small">Your name, role and class year come from school records. Ask an admin to correct them.</p>
+      <p className="muted small">Your name, role and class year (or department) come from school records. Ask an admin to correct them.</p>
       <PhotoPicker person={person} onChange={onPhotoChange} />
       <label className="field">
         <span>Bio</span>

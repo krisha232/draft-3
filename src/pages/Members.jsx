@@ -41,7 +41,7 @@ export default function Members() {
     if (role !== 'all' && p.role !== role) return false;
     if (year && String(p.batch_year) !== year) return false;
     if (q) {
-      const hay = `${p.full_name} ${p.headline || ''} ${p.location || ''} ${p.university || ''} ${p.major || ''} ${p.subjects || ''} ${p.field || ''} ${p.teaches || ''}`.toLowerCase();
+      const hay = `${p.full_name} ${p.headline || ''} ${p.location || ''} ${p.university || ''} ${p.major || ''} ${p.subjects || ''} ${p.field || ''} ${p.teaches || ''} ${p.department || ''}`.toLowerCase();
       if (!hay.includes(q.toLowerCase())) return false;
     }
     return true;
@@ -60,7 +60,7 @@ export default function Members() {
           <option value="all">Everyone</option>
           <option value="student">Students</option>
           <option value="alumni">Alumni</option>
-          <option value="staff">Staff</option>
+          <option value="staff">Teachers</option>
         </select>
         <select value={year} onChange={(e) => setYear(e.target.value)} aria-label="Class year">
           <option value="">Any year</option>

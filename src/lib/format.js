@@ -1,9 +1,10 @@
-export const ROLE_LABEL = { student: 'Student', alumni: 'Alumni', staff: 'Staff' };
+export const ROLE_LABEL = { student: 'Student', alumni: 'Alumni', staff: 'Teacher' };
 
 export function roleLine(p) {
   if (!p) return '';
   const role = ROLE_LABEL[p.role] || p.role;
-  if (p.role === 'staff' || !p.batch_year) return role;
+  if (p.role === 'staff') return p.department ? `${role}, ${p.department}` : role;
+  if (!p.batch_year) return role;
   return `${role}, class of ${p.batch_year}`;
 }
 

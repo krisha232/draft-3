@@ -51,6 +51,12 @@ export default function IdCard({ person, idNumber }) {
                 <dd>{person.subjects}</dd>
               </div>
             )}
+            {person.role === 'staff' && person.department && (
+              <div>
+                <dt>Department</dt>
+                <dd>{person.department}</dd>
+              </div>
+            )}
             {person.role === 'staff' && person.teaches && (
               <div>
                 <dt>Teaches</dt>

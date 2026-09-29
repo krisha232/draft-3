@@ -23,5 +23,5 @@ export const SITE_NAME = import.meta.env.VITE_SITE_NAME || 'The Neev Network';
 export const SCHOOL_NAME = import.meta.env.VITE_SCHOOL_NAME || 'Neev Academy';
 
 // Profile columns members are allowed to read (never use '*' on profiles).
-export const PROFILE_COLS = 'id, full_name, role, batch_year, is_admin, status, headline, bio, location, university, field, major, subjects, teaches, shared_email, avatar_path, created_at';
-export const AUTHOR_COLS = 'id, full_name, role, batch_year, avatar_path, field';
+export const PROFILE_COLS = 'id, full_name, role, batch_year, is_admin, status, headline, bio, location, university, field, major, subjects, teaches, shared_email, department, avatar_path, created_at';
+export const AUTHOR_COLS = 'id, full_name, role, batch_year, department, avatar_path, field';

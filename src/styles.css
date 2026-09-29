@@ -475,3 +475,9 @@ input[aria-invalid="true"] { border-color: var(--danger); box-shadow: 0 0 0 3px 
 .event-status.rejected { background: var(--danger-soft); color: var(--danger); }
 .event.event-pending { border-style: dashed; border-color: color-mix(in srgb, var(--neev-yellow) 70%, var(--line)); }
 .event.event-rejected { opacity: 0.85; }
+
+.graduate { border-left: 4px solid var(--neev-yellow); }
+.graduate-row { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; }
+.graduate-row select { width: auto; }
+.editing-row td { background: var(--surface-2); }
+.editing-row .field { margin-bottom: 0.6rem; }

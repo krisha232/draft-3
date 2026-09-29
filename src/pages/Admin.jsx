@@ -73,7 +73,7 @@ function Approvals({ pending, loading, reload }) {
               <td>{m.full_name}</td>
               <td className="mono">{m.id_number}</td>
               <td>{m.email}</td>
-              <td>{ROLE_LABEL[m.role]}{m.batch_year ? `, ${m.batch_year}` : ''}</td>
+              <td>{ROLE_LABEL[m.role]}{m.batch_year ? `, ${m.batch_year}` : m.department ? `, ${m.department}` : ''}</td>
               <td>{timeAgo(m.created_at)}</td>
               <td className="actions-cell">
                 <button className="btn small" onClick={() => run(supabase.rpc('admin_set_status', { target: m.user_id, new_status: 'active' }), reload)}>Approve</button>
@@ -118,7 +118,7 @@ function MembersAdmin({ members, reload }) {
                 <td>
                   <Link to={`/profile/${m.user_id}`}>{m.full_name}</Link>
                   {m.is_admin && <span className="tag tag-announcement">Admin</span>}
-                  <div className="muted small">{ROLE_LABEL[m.role]}{m.batch_year ? `, ${m.batch_year}` : ''}</div>
+                  <div className="muted small">{ROLE_LABEL[m.role]}{m.batch_year ? `, ${m.batch_year}` : m.department ? `, ${m.department}` : ''}</div>
                 </td>
                 <td className="mono">{m.id_number}</td>
                 <td>{m.email}</td>
@@ -187,19 +187,63 @@ function parseCsv(text) {
 }
 
 function toRosterRow(cells, lineNo) {
-  const [id, name, role, year] = cells;
-  const r = (role || '').toLowerCase();
+  const [id, name, role, fourth] = cells;
+  let r = (role || '').toLowerCase().trim();
+  if (r === 'teacher' || r === 'teachers') r = 'staff'; // teachers are stored as "staff"
   if (!id || !name) throw new Error(`Line ${lineNo}: ID number and name are required.`);
-  if (!['student', 'alumni', 'staff'].includes(r)) throw new Error(`Line ${lineNo}: role must be student, alumni or staff (got "${role || ''}").`);
-  const y = year ? Number(year) : null;
-  if (year && !Number.isInteger(y)) throw new Error(`Line ${lineNo}: class year "${year}" isn’t a year.`);
-  return {
+  if (!['student', 'alumni', 'staff'].includes(r)) throw new Error(`Line ${lineNo}: role must be student, alumni or teacher (got "${role || ''}").`);
+  const row = {
     id_number: id.toUpperCase().trim(),
     full_name: name.replace(/\s+/g, ' ').trim(),
     role: r,
-    batch_year: y,
+    batch_year: null,
+    department: null,
   };
+  const extra = (fourth || '').trim();
+  if (r === 'staff') {
+    row.department = extra || null;
+  } else if (extra) {
+    const y = Number(extra);
+    if (!Number.isInteger(y) || y < 1900 || y > 2200) throw new Error(`Line ${lineNo}: class year "${extra}" isn’t a year.`);
+    row.batch_year = y;
+  }
+  return row;
 }
+
+// "Class of 2027" for students and alumni, the department for teachers
+function yearOrDept(r) {
+  if (r.role === 'staff') return r.department || '';
+  return r.batch_year ? String(r.batch_year) : '';
+}
+
+function RoleYearFields({ value, onChange }) {
+  const set = (k) => (e) => onChange({ ...value, [k]: e.target.value });
+  return (
+    <div className="two-col">
+      <label className="field">
+        <span>Role</span>
+        <select value={value.role} onChange={set('role')}>
+          <option value="student">Student</option>
+          <option value="alumni">Alumni</option>
+          <option value="staff">Teacher</option>
+        </select>
+      </label>
+      {value.role === 'staff' ? (
+        <label className="field">
+          <span>Department</span>
+          <input maxLength={80} value={value.department} onChange={set('department')} placeholder="e.g. Science" />
+        </label>
+      ) : (
+        <label className="field">
+          <span>Class of</span>
+          <input inputMode="numeric" value={value.batch_year} onChange={set('batch_year')} placeholder="e.g. 2027" />
+        </label>
+      )}
+    </div>
+  );
+}
+
+const EMPTY_ONE = { id_number: '', full_name: '', role: 'student', batch_year: '', department: '' };
 
 function Roster() {
   const [rows, setRows] = useState(null);
@@ -208,12 +252,14 @@ function Roster() {
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [one, setOne] = useState({ id_number: '', full_name: '', role: 'student', batch_year: '' });
+  const [one, setOne] = useState(EMPTY_ONE);
+  const [editing, setEditing] = useState(null); // id_number being edited
+  const [draft, setDraft] = useState(null);
 
   const load = useCallback(async () => {
     const { data, error } = await supabase
       .from('roster')
-      .select('id_number, full_name, role, batch_year, claimed_by, claimed_at')
+      .select('id_number, full_name, role, batch_year, department, claimed_by, claimed_at')
       .order('id_number');
     if (error) setError(errorText(error));
     setRows(data || []);
@@ -222,6 +268,11 @@ function Roster() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const say = (m) => {
+    setError('');
+    setMsg(m);
+  };
 
   const importCsv = async () => {
     setMsg('');
@@ -247,7 +298,7 @@ function Roster() {
     }
     setBusy(false);
     setCsv('');
-    setMsg(`Saved ${parsed.length} roster entries. Existing IDs were updated.`);
+    say(`Saved ${parsed.length} roster entries. Existing IDs were updated.`);
     load();
   };
 
@@ -257,14 +308,36 @@ function Roster() {
     setError('');
     let row;
     try {
-      row = toRosterRow([one.id_number, one.full_name, one.role, one.batch_year], 1);
+      row = toRosterRow([one.id_number, one.full_name, one.role, one.role === 'staff' ? one.department : one.batch_year], 1);
     } catch (err) {
       return setError(err.message.replace('Line 1: ', ''));
     }
     const { error } = await supabase.from('roster').insert(row);
     if (error) return setError(/duplicate key/.test(error.message) ? `ID ${row.id_number} is already on the roster.` : errorText(error));
-    setOne({ id_number: '', full_name: '', role: 'student', batch_year: '' });
-    setMsg(`Added ${row.full_name} (${row.id_number}).`);
+    setOne(EMPTY_ONE);
+    say(`Added ${row.full_name} (${row.id_number}).`);
+    load();
+  };
+
+  const startEdit = (r) => {
+    setEditing(r.id_number);
+    setDraft({ full_name: r.full_name, role: r.role, batch_year: r.batch_year ? String(r.batch_year) : '', department: r.department || '' });
+  };
+
+  const saveEdit = async (r) => {
+    let row;
+    try {
+      row = toRosterRow([r.id_number, draft.full_name, draft.role, draft.role === 'staff' ? draft.department : draft.batch_year], 1);
+    } catch (err) {
+      return setError(err.message.replace('Line 1: ', ''));
+    }
+    const { error } = await supabase
+      .from('roster')
+      .update({ full_name: row.full_name, role: row.role, batch_year: row.batch_year, department: row.department })
+      .eq('id_number', r.id_number);
+    if (error) return setError(errorText(error));
+    setEditing(null);
+    say(`Updated ${row.full_name}.${r.claimed_by ? ' Their profile has been updated too.' : ''}`);
     load();
   };
 
@@ -275,45 +348,39 @@ function Roster() {
     load();
   };
 
-  const shown = (rows || []).filter((r) => `${r.id_number} ${r.full_name}`.toLowerCase().includes(q.toLowerCase()));
+  const shown = (rows || []).filter((r) => `${r.id_number} ${r.full_name} ${r.department || ''}`.toLowerCase().includes(q.toLowerCase()));
   const claimed = (rows || []).filter((r) => r.claimed_by).length;
 
   return (
     <>
       <p className="muted">
         The roster is the list of ID numbers allowed to join. Only admins can see it. People sign up, then enter their ID
-        number and name; both must match a row here.
+        number and name; both must match a row here. Changes to someone’s name, role, class year or department here
+        update their profile too.
       </p>
+
+      <GraduateClass rows={rows || []} onDone={(m) => { say(m); load(); }} onError={setError} />
+
       <div className="two-col">
         <form className="panel" onSubmit={addOne}>
           <h2>Add one person</h2>
           <label className="field"><span>ID number</span><input required value={one.id_number} onChange={(e) => setOne({ ...one, id_number: e.target.value })} /></label>
           <label className="field"><span>Full name</span><input required value={one.full_name} onChange={(e) => setOne({ ...one, full_name: e.target.value })} /></label>
-          <div className="two-col">
-            <label className="field">
-              <span>Role</span>
-              <select value={one.role} onChange={(e) => setOne({ ...one, role: e.target.value })}>
-                <option value="student">Student</option>
-                <option value="alumni">Alumni</option>
-                <option value="staff">Staff</option>
-              </select>
-            </label>
-            <label className="field"><span>Class of</span><input inputMode="numeric" value={one.batch_year} onChange={(e) => setOne({ ...one, batch_year: e.target.value })} /></label>
-          </div>
+          <RoleYearFields value={one} onChange={setOne} />
           <button className="btn">Add to roster</button>
         </form>
         <div className="panel">
           <h2>Import many from a spreadsheet</h2>
           <p className="muted small">
-            Paste rows as CSV with columns: id_number, full_name, role, batch_year. Role is student, alumni or
-            staff. Re-importing an existing ID updates it.
+            Paste rows as CSV with four columns: ID number, full name, role, and class year (for students and alumni) or
+            department (for teachers). Role is student, alumni or teacher. Re-importing an existing ID updates it.
           </p>
           <textarea
             rows={7}
             className="mono"
             value={csv}
             onChange={(e) => setCsv(e.target.value)}
-            placeholder={'id_number,full_name,role,batch_year\nSTU1001,Arjun Mehta,student,2028\nALU0450,Kavya Iyer,alumni,2015'}
+            placeholder={'id_number,full_name,role,class_year_or_department\nSTU1001,Arjun Mehta,student,2028\nALU0450,Kavya Iyer,alumni,2015\nTCH0012,Anita Sharma,teacher,Science'}
             aria-label="CSV rows"
           />
           <div className="row-end">
@@ -330,24 +397,82 @@ function Roster() {
       </div>
       <div className="table-wrap">
         <table className="table">
-          <thead><tr><th>ID number</th><th>Name</th><th>Role</th><th>Class of</th><th>Claimed</th><th /></tr></thead>
+          <thead><tr><th>ID number</th><th>Name</th><th>Role</th><th>Class of / Department</th><th>Claimed</th><th /></tr></thead>
           <tbody>
-            {shown.map((r) => (
-              <tr key={r.id_number}>
-                <td className="mono">{r.id_number}</td>
-                <td>{r.full_name}</td>
-                <td>{ROLE_LABEL[r.role]}</td>
-                <td>{r.batch_year || ''}</td>
-                <td>{r.claimed_by ? timeAgo(r.claimed_at) : <span className="muted">Not yet</span>}</td>
-                <td className="actions-cell">
-                  {!r.claimed_by && <button className="btn small ghost" onClick={() => remove(r)}>Remove</button>}
-                </td>
-              </tr>
-            ))}
+            {shown.map((r) =>
+              editing === r.id_number ? (
+                <tr key={r.id_number} className="editing-row">
+                  <td className="mono">{r.id_number}</td>
+                  <td colSpan={3}>
+                    <label className="field"><span>Full name</span><input value={draft.full_name} onChange={(e) => setDraft({ ...draft, full_name: e.target.value })} /></label>
+                    <RoleYearFields value={draft} onChange={setDraft} />
+                  </td>
+                  <td>{r.claimed_by ? timeAgo(r.claimed_at) : <span className="muted">Not yet</span>}</td>
+                  <td className="actions-cell">
+                    <button className="btn small" onClick={() => saveEdit(r)}>Save</button>
+                    <button className="btn small ghost" onClick={() => setEditing(null)}>Cancel</button>
+                  </td>
+                </tr>
+              ) : (
+                <tr key={r.id_number}>
+                  <td className="mono">{r.id_number}</td>
+                  <td>{r.full_name}</td>
+                  <td>{ROLE_LABEL[r.role]}</td>
+                  <td>{yearOrDept(r)}</td>
+                  <td>{r.claimed_by ? timeAgo(r.claimed_at) : <span className="muted">Not yet</span>}</td>
+                  <td className="actions-cell">
+                    <button className="btn small ghost" onClick={() => startEdit(r)}>Edit</button>
+                    {!r.claimed_by && <button className="btn small ghost" onClick={() => remove(r)}>Remove</button>}
+                  </td>
+                </tr>
+              )
+            )}
           </tbody>
         </table>
       </div>
     </>
+  );
+}
+
+// Move a whole class of students to alumni at the end of the school year
+function GraduateClass({ rows, onDone, onError }) {
+  const years = [...new Set(rows.filter((r) => r.role === 'student' && r.batch_year).map((r) => r.batch_year))].sort((a, b) => a - b);
+  const [year, setYear] = useState('');
+  const [busy, setBusy] = useState(false);
+  const chosen = year || (years[0] ? String(years[0]) : '');
+  const count = rows.filter((r) => r.role === 'student' && String(r.batch_year) === chosen).length;
+
+  const graduate = async () => {
+    if (!chosen || !count) return;
+    if (!confirm(`Move all ${count} students in the class of ${chosen} to alumni? Their accounts, posts and messages stay; their profiles will show them as alumni.`)) return;
+    setBusy(true);
+    const { error } = await supabase.from('roster').update({ role: 'alumni' }).eq('role', 'student').eq('batch_year', Number(chosen));
+    setBusy(false);
+    if (error) return onError(errorText(error));
+    setYear('');
+    onDone(`The class of ${chosen} is now alumni (${count} ${count === 1 ? 'person' : 'people'}). They can add their college and course under Edit profile.`);
+  };
+
+  return (
+    <div className="panel graduate">
+      <h2>Graduate a class</h2>
+      <p className="muted small">
+        At the end of the school year, move a graduating class from students to alumni in one step. To change just one
+        person, use Edit in the table below.
+      </p>
+      {years.length === 0 ? (
+        <p className="muted small">There are no students with a class year on the roster yet.</p>
+      ) : (
+        <div className="graduate-row">
+          <select value={chosen} onChange={(e) => setYear(e.target.value)} aria-label="Class year to graduate">
+            {years.map((y) => <option key={y} value={y}>Class of {y}</option>)}
+          </select>
+          <button className="btn" onClick={graduate} disabled={busy || !count}>
+            {busy ? 'Moving…' : `Make ${count} ${count === 1 ? 'student' : 'students'} alumni`}
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -443,7 +568,7 @@ function EventApprovals({ reload }) {
   return (
     <>
       <p className="muted">
-        Events created by students and alumni wait here until you approve them. Staff and admin events are published
+        Events created by students and alumni wait here until you approve them. Teacher and admin events are published
         straight away.
       </p>
       {events.length === 0 ? (
